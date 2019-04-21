@@ -126,7 +126,16 @@ class Embeddings(nn.Module):
         vocab_sizes.extend(feat_vocab_sizes)
         emb_dims.extend(feat_dims)
         pad_indices.extend(feat_padding_idx)
-  #      print('vocab_sizes, emb_dims, pad_indices', vocab_sizes, emb_dims, pad_indices)#test
+        
+        # latt for adaptable number of features
+        self.num_features = len(pad_indices) - 1
+        # print('vocab_sizes, emb_dims, pad_indices, feat_vocab_sizes', vocab_sizes, emb_dims, pad_indices, feat_vocab_sizes)#test
+        # print sample
+        # source
+        # vocab_sizes, emb_dims, pad_indices, feat_vocab_sizes [17398, 26997] [256, 256] [1, 1, 1, 1, 1, 1] [26997]
+    #target
+   # vocab_sizes, emb_dims, pad_indices, feat_vocab_sizes [17398] [256, 256] [1] []
+
         # The embedding matrix look-up tables. The first look-up table
         # is for words. Subsequent ones are for features, if any exist.
         emb_params = zip(vocab_sizes, emb_dims, pad_indices)
@@ -136,7 +145,7 @@ class Embeddings(nn.Module):
             embeddings = [nn.Embedding(vocab_sizes[0], emb_dims[0], padding_idx=pad_indices[0], sparse=sparse)]
             emb_params_senses = zip(vocab_sizes[1:], emb_dims[1:], pad_indices[1:])
        #     print('emb_params_senses', emb_params_senses) #test
-         #   num_features = len(feat_vec_size)
+        
        #     print('vocab_sizes[1], emb_dims[1]', vocab_sizes, emb_dims)
             embeddings_senses = [nn.Embedding(vocab_sizes[1], emb_dims[1], padding_idx=1, sparse=sparse)]
       #      print('embeddings_senses', embeddings_senses)
@@ -237,10 +246,25 @@ class Embeddings(nn.Module):
       #      print('self.feat_vocab_sizes', self.feat_vocab_sizes) # test
             #source_backup_latt = source #latt
 # split source into words and features
-            source, source_backup_latt = torch.split(source, [1,5], dim = 2)
+            source, source_backup_latt = torch.split(source, [1, self.num_features], dim = 2)   
+            # print('size of word and feats', source.size(), source_backup_latt.size()) # test
+            # print sample
+       #     size of word and feats torch.Size([39, 11, 1]) torch.Size([39, 11, 5])
+#size of word and feats torch.Size([15, 28, 1]) torch.Size([15, 28, 5])
+#size of word and feats torch.Size([32, 13, 1]) torch.Size([32, 13, 5])
+#size of word and feats torch.Size([49, 6, 1]) torch.Size([49, 6, 5])
+#size of word and feats torch.Size([9, 36, 1]) torch.Size([9, 36, 5])
+            
+            ## [1, n] in torch.split, n shall be adjusted for num_fac
+            
 # change features from multi-column to single columns, and concatenate them
+            #print('size of word and feats', source.size(), source_backup_latt.size()) # test
+            #size of word and feats torch.Size([17, 2, 1]) torch.Size([17, 2, 3])
             source_backup_latt = torch.cat(torch.split(source_backup_latt, 1, dim = 2), dim = 1)
-      #      print('after size source_backup_latt', source_backup_latt.size())
+            #print('after size source_backup_latt', source_backup_latt.size())
+            #after size source_backup_latt torch.Size([17, 6, 1])
+            # max length x (sent no. x fac no.) x 1
+              #              sent1_fac1 sent2_fac1 sent1_fac2 sent2_fac2 sent1_fac3 sent2_fac3
         
         
       #  print('source in embeddings.py', source.size())
@@ -279,7 +303,19 @@ class Embeddings(nn.Module):
                  #       print('source else in embeddings.py', source_backup_latt) # test
                         source_backup_latt = module(source_backup_latt)
                # 5 in torch.cunk below need to be updated or improved
-            source_backup_latt = torch.cat(torch.chunk(source_backup_latt, 5, dim = 1), dim = 2)
+               
+          #  print("source_backup_latt pre", source_backup_latt.size())
+            #source_backup_latt pre torch.Size([9, 3, 256])
+            #source_backup_latt pre torch.Size([17, 6, 256])
+            source_backup_latt = torch.cat(torch.chunk(source_backup_latt, self.num_features, dim = 1), dim = 2)  
+           # print("source_backup_latt pst", source_backup_latt.size())
+            #source_backup_latt pst torch.Size([9, 1, 768])
+            #source_backup_latt pst torch.Size([17, 2, 768])
+            #   max sent length x sent no. x (dim x fac no.)
+            #                                emb_fac1 emb_fac2 emb_fac3
+            
+            ## second argument of torch.chunk() shall be adjusted for num_fac
+            
       #      print('source_backup_latt final size', source_backup_latt.size())
 
         if self.feat_merge == 'latt' and len(self.feat_vocab_sizes) > 0:
