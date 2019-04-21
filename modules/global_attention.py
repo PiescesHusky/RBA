@@ -135,7 +135,7 @@ class GlobalAttention(nn.Module):
 
             return self.v(wquh.view(-1, dim)).view(tgt_batch, tgt_len, src_len)
 
-    def forward(self, source, memory_bank, memory_lengths=None, coverage=None):
+    def forward(self, source, memory_bank, n, latt=False, memory_lengths=None, coverage=None):
         """
 
         Args:
@@ -184,9 +184,11 @@ class GlobalAttention(nn.Module):
             mask = mask.unsqueeze(1)  # Make it broadcastable.
             align.masked_fill_(1 - mask, -float('inf'))
 
+     #   print('align', align)
+
         # Softmax or sparsemax to normalize attention weights
         if self.attn_func == "softmax":
-            align_vectors = F.softmax(align.view(batch*target_l, source_l), -1)
+            align_vectors = F.softmax(align.view(batch*target_l, source_l), -1)    # latt comment   align vectors
         else:
             align_vectors = sparsemax(align.view(batch*target_l, source_l), -1)
         align_vectors = align_vectors.view(batch, target_l, source_l)
@@ -195,7 +197,7 @@ class GlobalAttention(nn.Module):
         # over all the source hidden states
         c = torch.bmm(align_vectors, memory_bank)
 
-        # concatenate
+        # concatenate context and source
         concat_c = torch.cat([c, source], 2).view(batch*target_l, dim*2)
         attn_h = self.linear_out(concat_c).view(batch, target_l, dim)
         if self.attn_type in ["general", "dot"]:
@@ -229,5 +231,15 @@ class GlobalAttention(nn.Module):
             aeq(target_l, target_l_)
             aeq(batch, batch_)
             aeq(source_l, source_l_)
-     #   print('global attn attn_h, align_vectors', attn_h.size(), align_vectors.size())
+            
+        
+        #print('global attn attn_h, align_vectors', attn_h.size(), align_vectors.size()) # latt
+        #global attn attn_h, align_vectors torch.Size([1, 9, 256]) torch.Size([9, 1, 27])
+        #                                          no. of sen x max length x dim
+        #global attn attn_h, align_vectors torch.Size([2, 17, 256]) torch.Size([17, 2, 51])  
+        #print('attn_h', attn_h)   # latt
+        torch.set_printoptions(profile="full")
+        #print('align_vectors', align_vectors)    # latt
+        torch.set_printoptions(profile="default")
+        
         return attn_h, align_vectors  #latt ignore 
